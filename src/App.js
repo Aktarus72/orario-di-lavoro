@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Save, Trash2, FileText, Plus, X, Download, CheckCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Save, FileText, Plus, X, Download, CheckCircle } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
@@ -11,7 +11,6 @@ const WorkCalendar = () => {
   const [selectedDay, setSelectedDay] = useState(null);
   const [showAddType, setShowAddType] = useState(false);
   const [newTypeName, setNewTypeName] = useState("");
-  const [pdfReady, setPdfReady] = useState(false);
 
   useEffect(() => { localStorage.setItem('workData', JSON.stringify(workData)); }, [workData]);
   useEffect(() => { localStorage.setItem('shiftTypes', JSON.stringify(shiftTypes)); }, [shiftTypes]);
@@ -44,29 +43,16 @@ const WorkCalendar = () => {
     return { type: "Lavoro", hours: 8, label: "" };
   };
 
-  const getSummary = () => {
-    let s = { lavoro: 0, ferie: 0, malattia: 0, permessi: 0, smart: 0, riposo: 0 };
-    const days = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-    for (let d = 1; d <= days; d++) {
-      const dStr = formatDate(currentDate.getFullYear(), currentDate.getMonth(), d);
-      const data = workData[dStr] || getDefaultShift(dStr);
-      if (data.type === "Lavoro") s.lavoro++;
-      else if (data.type === "Smart Working") s.smart++;
-      else if (data.type === "Ferie") s.ferie++;
-      else if (data.type === "Malattia") s.malattia++;
-      else if (data.type === "Riposo") s.riposo++;
-      else if (data.type === "Permesso") s.permessi += parseFloat(data.hours || 0);
-    }
-    return s;
-  };
-
   const generatePDF = () => {
     const doc = new jsPDF();
     const monthLabel = currentDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' });
-    doc.setFontSize(18); doc.text(`Riepilogo Presenze - ${monthLabel}`, 14, 20);
+    doc.setFontSize(18); doc.text(`Prospetto Ore Lavoro - ${monthLabel}`, 14, 20);
+    
     const s = getSummary();
-    doc.setFontSize(11);
-    doc.text(`Lavoro: ${s.lavoro + s.smart}gg | Ferie: ${s.ferie}gg | Permessi: ${s.permessi}h`, 14, 30);
+    doc.setFontSize(10);
+    doc.text(`Riepilogo Busta Paga:`, 14, 30);
+    doc.text(`LAVORO: ${s.oreLavoro}h (${(s.oreLavoro/8).toFixed(1)}gg) | FERIE: ${s.oreFerie}h (${(s.oreFerie/8).toFixed(1)}gg) | MALATTIA: ${s.oreMalattia}h | PERMESSI: ${s.orePermessi}h`, 14, 36);
+
     const rows = [];
     const totalDays = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
     for (let d = 1; d <= totalDays; d++) {
@@ -74,9 +60,28 @@ const WorkCalendar = () => {
       const data = workData[dStr] || getDefaultShift(dStr);
       rows.push([`${d} ${new Date(dStr).toLocaleDateString('it-IT', {weekday:'short'})}`, data.type, `${data.hours}h`, data.notes || ""]);
     }
-    doc.autoTable({ head: [['Giorno', 'Turno', 'Ore', 'Note']], body: rows, startY: 40, theme: 'grid', headStyles: {fillColor:[37,99,235]} });
-    doc.save(`Orario_${monthLabel.replace(' ','_')}.pdf`);
-    setPdfReady(true); // Mostra il messaggio di successo invece di cambiare pagina
+
+    doc.autoTable({ head: [['Giorno', 'Voce', 'Quantità', 'Note']], body: rows, startY: 42, theme: 'grid', headStyles: {fillColor:[37,99,235]} });
+    
+    // Forza apertura in nuova scheda su iPad
+    const pdfOutput = doc.output('bloburl');
+    window.open(pdfOutput, '_blank');
+  };
+
+  const getSummary = () => {
+    let s = { oreLavoro: 0, oreFerie: 0, oreMalattia: 0, orePermessi: 0, oreSmart: 0 };
+    const days = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+    for (let d = 1; d <= days; d++) {
+      const dStr = formatDate(currentDate.getFullYear(), currentDate.getMonth(), d);
+      const data = workData[dStr] || getDefaultShift(dStr);
+      const h = parseFloat(data.hours || 0);
+      if (data.type === "Lavoro") s.oreLavoro += h;
+      else if (data.type === "Smart Working") s.oreSmart += h;
+      else if (data.type === "Ferie") s.oreFerie += h;
+      else if (data.type === "Malattia") s.oreMalattia += h;
+      else if (data.type === "Permesso") s.orePermessi += h;
+    }
+    return s;
   };
 
   const summary = getSummary();
@@ -93,44 +98,38 @@ const WorkCalendar = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 bg-gray-50 min-h-screen font-sans text-gray-900 pb-20">
-      {/* HEADER DINAMICO */}
-      <header className="bg-white p-5 rounded-2xl shadow-sm mb-4 border border-gray-100 sticky top-0 z-30">
+    <div className="max-w-7xl mx-auto p-4 bg-gray-100 min-h-screen font-sans text-gray-900 pb-20">
+      <header className="bg-white p-5 rounded-2xl shadow-md mb-4 sticky top-0 z-30 border-b-4 border-blue-600">
         <div className="flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-4">
-            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-2 bg-gray-100 rounded-full"><ChevronLeft /></button>
+            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-2 bg-gray-100 rounded-full active:bg-gray-300"><ChevronLeft /></button>
             <h1 className="text-xl font-black capitalize w-48 text-center">{currentDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' })}</h1>
-            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 bg-gray-100 rounded-full"><ChevronRight /></button>
+            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 bg-gray-100 rounded-full active:bg-gray-300"><ChevronRight /></button>
           </div>
           
-          {/* RIEPILOGO RAPIDO IN ALTO */}
           <div className="flex flex-wrap justify-center gap-2">
-            <div className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-center min-w-[80px]">
-              <p className="text-[9px] uppercase font-bold opacity-80">Lavoro</p>
-              <p className="text-lg font-black">{summary.lavoro + summary.smart}g</p>
+            <div className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-center shadow">
+              <p className="text-[9px] uppercase font-bold">Ore Lav.</p>
+              <p className="text-lg font-black">{summary.oreLavoro + summary.oreSmart}h</p>
             </div>
-            <div className="bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-center min-w-[80px]">
-              <p className="text-[9px] uppercase font-bold opacity-80">Ferie</p>
-              <p className="text-lg font-black">{summary.ferie}g</p>
+            <div className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-center shadow">
+              <p className="text-[9px] uppercase font-bold">Ferie</p>
+              <p className="text-lg font-black">{summary.oreFerie}h</p>
             </div>
-            <div className="bg-amber-500 text-white px-3 py-1.5 rounded-lg text-center min-w-[80px]">
-              <p className="text-[9px] uppercase font-bold opacity-80">Permessi</p>
-              <p className="text-lg font-black">{summary.permessi}h</p>
+            <div className="bg-amber-500 text-white px-3 py-1.5 rounded-lg text-center shadow">
+              <p className="text-[9px] uppercase font-bold">Permessi</p>
+              <p className="text-lg font-black">{summary.orePermessi}h</p>
             </div>
-            <div className="bg-red-500 text-white px-3 py-1.5 rounded-lg text-center min-w-[80px]">
-              <p className="text-[9px] uppercase font-bold opacity-80">Malattia</p>
-              <p className="text-lg font-black">{summary.malattia}g</p>
-            </div>
-            <button onClick={generatePDF} className="bg-gray-900 text-white px-4 py-1.5 rounded-lg flex items-center gap-2 hover:bg-black">
-              <Download size={18}/> PDF
+            <button onClick={generatePDF} className="bg-gray-900 text-white px-5 py-2 rounded-xl flex items-center gap-2 font-bold active:scale-95 transition-transform">
+              <Download size={20}/> GENERA PDF
             </button>
           </div>
         </div>
       </header>
 
-      <div className="flex flex-col lg:flex-row gap-4">
-        <div className="flex-grow bg-white p-2 md:p-4 rounded-2xl shadow-sm border border-gray-100">
-          <div className="grid grid-cols-7 text-center font-bold text-gray-400 mb-2 uppercase text-[10px] tracking-widest">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <div className="lg:col-span-3 bg-white p-2 rounded-2xl shadow-sm overflow-hidden">
+          <div className="grid grid-cols-7 text-center font-bold text-gray-400 mb-2 uppercase text-[10px] tracking-tighter">
             {['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'].map(d => <div key={d}>{d}</div>)}
           </div>
           <div className="grid grid-cols-7 border-l border-t border-gray-100">
@@ -139,22 +138,22 @@ const WorkCalendar = () => {
               const totalDays = new Date(year, month + 1, 0).getDate();
               const startOffset = (new Date(year, month, 1).getDay() + 6) % 7;
               const days = [];
-              for (let i = 0; i < startOffset; i++) days.push(<div key={`e-${i}`} className="h-24 md:h-28 bg-gray-50 border-r border-b border-gray-100"></div>);
+              for (let i = 0; i < startOffset; i++) days.push(<div key={`e-${i}`} className="h-24 bg-gray-50 border-r border-b border-gray-100"></div>);
               for (let d = 1; d <= totalDays; d++) {
                 const dStr = formatDate(year, month, d);
                 const data = workData[dStr] || getDefaultShift(dStr);
                 days.push(
-                  <div key={d} onClick={() => { const dateStr = formatDate(currentDate.getFullYear(), currentDate.getMonth(), d); const existingData = workData[dateStr] || getDefaultShift(dateStr); setSelectedDay({ ...existingData, date: dateStr }); }} 
-                       className="h-24 md:h-28 border-r border-b border-gray-100 p-1 cursor-pointer hover:bg-blue-50 bg-white transition-colors">
+                  <div key={d} onClick={() => { const dateStr = formatDate(currentDate.getFullYear(), currentDate.getMonth(), d); setSelectedDay({ ...(workData[dateStr] || getDefaultShift(dateStr)), date: dateStr }); }} 
+                       className="h-24 border-r border-b border-gray-100 p-1 cursor-pointer hover:bg-blue-50 bg-white transition-colors">
                     <div className="flex justify-between items-start">
-                      <span className={`text-xs font-bold ${data.type === "Festivo" ? 'text-orange-500' : 'text-gray-400'}`}>{d}</span>
-                      {data.label && <span className="text-[7px] uppercase font-bold text-orange-400 leading-none text-right">{data.label}</span>}
+                      <span className={`text-[10px] font-bold ${data.type === "Festivo" ? 'text-red-500' : 'text-gray-400'}`}>{d}</span>
+                      {data.label && <span className="text-[7px] uppercase font-bold text-red-400 leading-none truncate w-12 text-right">{data.label}</span>}
                     </div>
-                    <div className={`text-[9px] md:text-[10px] rounded p-1.5 h-[55px] md:h-[70px] mt-1 flex flex-col justify-between ${shiftColors[data.type] || shiftColors.default}`}>
-                      <div className="font-bold leading-tight truncate">{data.type}</div>
-                      <div className="flex justify-between items-end font-black uppercase italic opacity-70">
+                    <div className={`text-[9px] rounded p-1 h-[55px] mt-1 flex flex-col justify-between ${shiftColors[data.type] || shiftColors.default}`}>
+                      <div className="font-bold truncate leading-tight uppercase">{data.type}</div>
+                      <div className="flex justify-between items-end font-black text-xs">
                           <span>{data.hours > 0 ? `${data.hours}h` : ''}</span>
-                          {data.notes && <FileText size={10}/>}
+                          {data.notes && <FileText size={10} className="opacity-50"/>}
                       </div>
                     </div>
                   </div>
@@ -165,60 +164,53 @@ const WorkCalendar = () => {
           </div>
         </div>
 
-        <aside className="lg:w-72 space-y-4">
+        <div className="space-y-4">
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-            <h3 className="font-bold mb-2 text-xs uppercase text-gray-400 tracking-widest">Note del Mese</h3>
+            <h3 className="font-bold mb-2 text-xs uppercase text-gray-400 tracking-widest">Appunti Mese</h3>
             <textarea 
-              className="w-full border border-gray-100 p-3 rounded-xl h-24 text-sm outline-none focus:ring-2 focus:ring-blue-100 bg-gray-50"
+              className="w-full border border-gray-100 p-3 rounded-xl h-24 text-sm outline-none focus:ring-2 focus:ring-blue-100 bg-gray-50 shadow-inner"
               value={monthNotes[currentMonthKey] || ""}
               onChange={(e) => setMonthNotes({...monthNotes, [currentMonthKey]: e.target.value})}
-              placeholder="Scrivi qui..."
+              placeholder="Esempio: Trasferte, Bonus..."
             />
           </div>
-          <button onClick={() => {if(confirm("Vuoi azzerare il mese?")) setWorkData({});}} className="w-full text-red-400 text-[10px] font-bold uppercase tracking-widest hover:text-red-600 transition">Azzera Modifiche</button>
-        </aside>
-      </div>
-
-      {/* MESSAGGIO PDF PRONTO (SOSTITUISCE IL TASTO INDIETRO) */}
-      {pdfReady && (
-        <div className="fixed bottom-10 left-1/2 transform -translate-x-1/2 z-50 animate-bounce">
-          <div className="bg-emerald-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3">
-            <CheckCircle size={24} />
-            <span className="font-bold">PDF Scaricato con successo!</span>
-            <button onClick={() => setPdfReady(false)} className="bg-white/20 p-1 rounded-full"><X size={18}/></button>
+          <div className="bg-blue-900 text-white p-4 rounded-2xl shadow-lg">
+             <h4 className="text-[10px] uppercase font-bold mb-2 opacity-70 tracking-widest">Totali in Giorni (8h)</h4>
+             <p className="text-sm font-medium">Lavoro: <b>{(summary.oreLavoro / 8).toFixed(1)} gg</b></p>
+             <p className="text-sm font-medium">Ferie: <b>{(summary.oreFerie / 8).toFixed(1)} gg</b></p>
+             <p className="text-sm font-medium border-t border-white/20 mt-2 pt-2 italic text-xs opacity-80 underline cursor-pointer" onClick={() => setWorkData({})}>Azzera calendario</p>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* MODALE GIORNO */}
       {selectedDay && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-          <div className="bg-white rounded-[2rem] p-6 w-full max-w-lg shadow-2xl border border-gray-100">
-            <div className="flex justify-between items-center mb-6 border-b pb-4 border-gray-50">
-                <h2 className="text-xl font-black capitalize text-blue-900">{new Date(selectedDay.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
-                <button onClick={() => setSelectedDay(null)} className="p-2 bg-gray-50 rounded-full text-gray-400"><X size={20}/></button>
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-[2.5rem] p-6 w-full max-w-lg shadow-2xl border-4 border-blue-600">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-black capitalize text-blue-900">{new Date(selectedDay.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric' })}</h2>
+                <button onClick={() => setSelectedDay(null)} className="p-3 bg-gray-100 rounded-full text-gray-400 active:scale-90"><X size={24}/></button>
             </div>
-            <div className="grid grid-cols-3 gap-2 mb-6">
+            <div className="grid grid-cols-3 gap-2.5 mb-6">
                 {shiftTypes.map(t => (
-                    <button key={t} onClick={() => setSelectedDay({...selectedDay, type: t, hours: (["Lavoro", "Ferie", "Malattia", "Riposo", "Smart Working"].includes(t)) ? 8 : (t === "Permesso" ? 1 : 0)})} 
-                            className={`p-3 rounded-xl border text-[10px] font-bold transition-all ${selectedDay.type === t ? 'bg-blue-600 text-white border-blue-600 shadow-md scale-105' : 'bg-gray-50 text-gray-500 border-gray-100'}`}>{t}</button>
+                    <button key={t} onClick={() => setSelectedDay({...selectedDay, type: t, hours: 8})} 
+                            className={`p-3 rounded-2xl border-2 text-[10px] font-black transition-all uppercase ${selectedDay.type === t ? 'bg-blue-600 text-white border-blue-600 shadow-lg scale-105' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>{t}</button>
                 ))}
                 {showAddType ? (
                     <div className="col-span-2 flex gap-1"><input autoFocus className="border p-2 rounded-lg text-xs w-full bg-blue-50" value={newTypeName} onChange={e => setNewTypeName(e.target.value)}/><button onClick={() => {if(newTypeName){setShiftTypes([...shiftTypes, newTypeName]); setNewTypeName(""); setShowAddType(false);}}} className="bg-blue-600 text-white p-2 rounded-lg"><Plus size={16}/></button></div>
                 ) : (
-                    <button onClick={() => setShowAddType(true)} className="p-3 rounded-xl border border-dashed border-gray-300 text-[10px] font-bold text-gray-400">+ NUOVO</button>
+                    <button onClick={() => setShowAddType(true)} className="p-3 rounded-2xl border-2 border-dashed border-gray-300 text-[10px] font-black text-gray-400">+ VOCE</button>
                 )}
             </div>
-            <div className="bg-blue-50 p-4 rounded-2xl mb-6 flex items-center justify-between border border-blue-100">
-                <span className="text-xs font-black text-blue-400 uppercase tracking-widest text-center">Ore</span>
+            <div className="bg-blue-50 p-5 rounded-3xl mb-6 flex items-center justify-between border-2 border-blue-100">
+                <span className="text-xs font-black text-blue-400 uppercase tracking-widest">Regola Ore</span>
                 <div className="flex items-center gap-6">
-                    <button onClick={() => setSelectedDay({...selectedDay, hours: Math.max(0, selectedDay.hours - 1)})} className="w-12 h-12 bg-white border border-blue-100 rounded-full font-black text-2xl text-blue-600 shadow-sm">-</button>
-                    <span className="text-4xl font-black text-blue-700 w-12 text-center">{selectedDay.hours}</span>
-                    <button onClick={() => setSelectedDay({...selectedDay, hours: selectedDay.hours + 1})} className="w-12 h-12 bg-white border border-blue-100 rounded-full font-black text-2xl text-blue-600 shadow-sm">+</button>
+                    <button onClick={() => setSelectedDay({...selectedDay, hours: Math.max(0, selectedDay.hours - 1)})} className="w-14 h-14 bg-white border-2 border-blue-200 rounded-full font-black text-3xl text-blue-600 shadow-md active:bg-blue-100">-</button>
+                    <span className="text-5xl font-black text-blue-800 w-16 text-center">{selectedDay.hours}</span>
+                    <button onClick={() => setSelectedDay({...selectedDay, hours: selectedDay.hours + 1})} className="w-14 h-14 bg-white border-2 border-blue-200 rounded-full font-black text-3xl text-blue-600 shadow-md active:bg-blue-100">+</button>
                 </div>
             </div>
-            <textarea className="w-full border border-gray-100 p-4 rounded-2xl h-24 mb-6 text-sm outline-none bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all" placeholder="Note facoltative..." value={selectedDay.notes || ""} onChange={e => setSelectedDay({...selectedDay, notes: e.target.value})}/>
-            <button onClick={() => {setWorkData({...workData, [selectedDay.date]: selectedDay}); setSelectedDay(null);}} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-lg shadow-xl hover:bg-blue-700 active:scale-95 transition-all">SALVA GIORNO</button>
+            <textarea className="w-full border-2 border-gray-100 p-4 rounded-3xl h-24 mb-6 text-sm outline-none focus:border-blue-300 transition-colors shadow-inner bg-gray-50" placeholder="Note per questo giorno..." value={selectedDay.notes || ""} onChange={e => setSelectedDay({...selectedDay, notes: e.target.value})}/>
+            <button onClick={() => {setWorkData({...workData, [selectedDay.date]: selectedDay}); setSelectedDay(null);}} className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black text-xl shadow-xl active:scale-95 transition-all uppercase tracking-widest">Salva Modifiche</button>
           </div>
         </div>
       )}

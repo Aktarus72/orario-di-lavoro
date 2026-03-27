@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Settings, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
-
-// --- CONFIGURAZIONE FIREBASE ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
@@ -27,7 +25,7 @@ const WorkCalendar = () => {
   const [balances, setBalances] = useState({ 
     ferieIniziali: "69", 
     rolIniziali: "0", 
-    maturazioneFerie: "2.1", 
+    maturazioneFerie: "2.15", 
     maturazioneRol: "7", 
     dataInizioSaldo: "2025-08" 
   });
@@ -75,34 +73,39 @@ const WorkCalendar = () => {
     return s;
   })();
 
-  // --- CALCOLO RESIDUI (SOLO FERIE/ROL SPECIFICI) ---
+  // --- CALCOLO RESIDUI (MATEMATICA CORRETTA) ---
   const calculateResidui = () => {
-    let runningFerie = parseFloat(balances.ferieIniziali || 0);
-    let runningRol = parseFloat(balances.rolIniziali || 0);
+    let resF = parseFloat(balances.ferieIniziali || 0);
+    let resR = parseFloat(balances.rolIniziali || 0);
     const matF = parseFloat(balances.maturazioneFerie || 0);
     const matR = parseFloat(balances.maturazioneRol || 0);
 
-    const startDate = new Date(balances.dataInizioSaldo + "-01");
-    const viewDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const start = new Date(balances.dataInizioSaldo + "-01");
+    const view = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
 
-    let tempDate = new Date(startDate);
-    while (tempDate <= viewDate) {
-      runningFerie += matF;
-      runningRol += matR;
+    let temp = new Date(start);
+    // Ciclo sui mesi dal punto di inizio al mese visualizzato
+    while (temp <= view) {
+      // Se NON siamo nel mese iniziale, aggiungi maturazione
+      // (Perché il valore iniziale è già il saldo "finito" di quel mese)
+      if (temp.getTime() !== start.getTime()) {
+        resF += matF;
+        resR += matR;
+      }
 
-      const m = tempDate.getMonth(), y = tempDate.getFullYear();
+      // Sottrai i goduti solo di questo mese specifico
+      const m = temp.getMonth(), y = temp.getFullYear();
       const lastDay = new Date(y, m + 1, 0).getDate();
       for (let d = 1; d <= lastDay; d++) {
         const dStr = formatDate(y, m, d);
         if (workData[dStr]) {
-          // SOTTRAI SOLO SE IL TIPO MATCHA ESATTAMENTE
-          if (workData[dStr].type === "Ferie Godute") runningFerie -= 1;
-          if (workData[dStr].type === "Permesso ROL") runningRol -= parseFloat(workData[dStr].hours || 0);
+          if (workData[dStr].type === "Ferie Godute") resF -= 1;
+          if (workData[dStr].type === "Permesso ROL") resR -= parseFloat(workData[dStr].hours || 0);
         }
       }
-      tempDate.setMonth(tempDate.getMonth() + 1);
+      temp.setMonth(temp.getMonth() + 1);
     }
-    return { ferie: runningFerie, rol: runningRol };
+    return { ferie: resF, rol: resR };
   };
 
   const finalRes = calculateResidui();
@@ -112,11 +115,11 @@ const WorkCalendar = () => {
     <div className="max-w-7xl mx-auto p-4 bg-slate-50 min-h-screen font-sans pb-10">
       {/* HEADER RESIDUI */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className={`p-5 rounded-[2rem] bg-white border-b-4 shadow-sm ${finalRes.ferie < 0 ? 'border-red-500' : 'border-green-500'}`}>
+        <div className="p-5 rounded-[2rem] bg-white border-b-4 border-green-500 shadow-sm">
           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Mio Residuo Ferie</p>
           <p className="text-2xl font-black">{finalRes.ferie.toFixed(2)} <span className="text-[10px] text-gray-300">GG</span></p>
         </div>
-        <div className={`p-5 rounded-[2rem] bg-white border-b-4 shadow-sm ${finalRes.rol < 0 ? 'border-red-500' : 'border-blue-500'}`}>
+        <div className="p-5 rounded-[2rem] bg-white border-b-4 border-blue-500 shadow-sm">
           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Mio Residuo ROL</p>
           <p className="text-2xl font-black">{finalRes.rol.toFixed(2)} <span className="text-[10px] text-gray-300">H</span></p>
         </div>
@@ -127,11 +130,10 @@ const WorkCalendar = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* CALENDARIO */}
         <div className="lg:col-span-3 bg-white p-6 rounded-[3rem] shadow-sm border border-gray-100">
           <div className="flex justify-between items-center mb-8">
             <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-3 bg-gray-100 rounded-full"><ChevronLeft/></button>
-            <h1 className="text-2xl font-black capitalize tracking-tighter">{currentDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' })}</h1>
+            <h1 className="text-2xl font-black capitalize">{currentDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' })}</h1>
             <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-3 bg-gray-100 rounded-full"><ChevronRight/></button>
           </div>
           <div className="grid grid-cols-7 gap-px bg-gray-100 border rounded-3xl overflow-hidden">
@@ -150,7 +152,7 @@ const WorkCalendar = () => {
                     <div className="flex justify-between items-start mb-2"><span className="text-xs font-black text-gray-300">{d}</span>{getHolidays(year)[dStr] && <span className="text-[8px] bg-red-100 text-red-600 px-2 py-1 rounded-lg font-black uppercase">{getHolidays(year)[dStr]}</span>}</div>
                     <div className={`rounded-2xl p-3 text-[10px] font-bold h-24 flex flex-col justify-between shadow-sm ${(data.type === "Lavoro") ? "bg-green-100 text-green-800 border-l-4 border-green-600" : (data.type === "Ferie Godute" || data.type === "Malattia") ? "bg-red-100 text-red-800 border-l-4 border-red-600" : (data.type === "Permesso ROL" || data.type === "Permesso 104") ? "bg-blue-100 text-blue-800 border-l-4 border-blue-600" : "bg-gray-100 text-gray-400 border-l-4 border-gray-300"}`}>
                       <div className="uppercase tracking-tighter">{data.type}</div>
-                      <div className="text-[9px] italic opacity-60 truncate font-medium">{data.notes}</div>
+                      <div className="text-[9px] italic opacity-60 truncate">{data.notes}</div>
                       <div className="text-right font-black">{data.hours > 0 ? `${data.hours}h` : ''}</div>
                     </div>
                   </div>
@@ -161,23 +163,22 @@ const WorkCalendar = () => {
           </div>
         </div>
 
-        {/* SIDEBAR */}
         <div className="space-y-4">
           <div className="bg-white p-7 rounded-[3rem] shadow-xl border-2 border-orange-100">
             <h3 className="text-[10px] font-black uppercase text-orange-500 mb-6 flex items-center gap-2"><AlertTriangle size={16}/> Controllo Busta</h3>
-            <div className="space-y-4">
-              <div><label className="text-[9px] font-black text-gray-400 uppercase">Residuo Ferie Busta</label><div className="flex gap-2"><input type="number" className="w-full bg-gray-50 p-4 rounded-2xl text-sm font-bold border-none outline-none" value={currentPayslip.ferie} onChange={(e) => { const n = {...payslipData, [currentMonthKey]: {...currentPayslip, ferie: e.target.value}}; setPayslipData(n); saveToCloud(n, "buste_paga"); }}/><div className={`p-4 rounded-2xl ${Math.abs(parseFloat(currentPayslip.ferie || 0) - finalRes.ferie) < 0.5 ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>{Math.abs(parseFloat(currentPayslip.ferie || 0) - finalRes.ferie) < 0.5 ? <CheckCircle2 size={20}/> : <AlertTriangle size={20}/>}</div></div></div>
-              <div><label className="text-[9px] font-black text-gray-400 uppercase">Residuo ROL Busta</label><div className="flex gap-2"><input type="number" className="w-full bg-gray-50 p-4 rounded-2xl text-sm font-bold border-none outline-none" value={currentPayslip.rol} onChange={(e) => { const n = {...payslipData, [currentMonthKey]: {...currentPayslip, rol: e.target.value}}; setPayslipData(n); saveToCloud(n, "buste_paga"); }}/><div className={`p-4 rounded-2xl ${Math.abs(parseFloat(currentPayslip.rol || 0) - finalRes.rol) < 1 ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>{Math.abs(parseFloat(currentPayslip.rol || 0) - finalRes.rol) < 1 ? <CheckCircle2 size={20}/> : <AlertTriangle size={20}/>}</div></div></div>
+            <div className="space-y-4 text-sm font-bold">
+              <div><label className="text-[9px] text-gray-400 uppercase">Residuo Ferie Busta</label><div className="flex gap-2"><input type="number" step="0.01" className="w-full bg-gray-50 p-4 rounded-2xl outline-none" value={currentPayslip.ferie} onChange={(e) => { const n = {...payslipData, [currentMonthKey]: {...currentPayslip, ferie: e.target.value}}; setPayslipData(n); saveToCloud(n, "buste_paga"); }}/><div className={`p-4 rounded-2xl ${Math.abs(parseFloat(currentPayslip.ferie || 0) - finalRes.ferie) < 0.1 ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}><CheckCircle2 size={20}/></div></div></div>
+              <div><label className="text-[9px] text-gray-400 uppercase">Residuo ROL Busta</label><div className="flex gap-2"><input type="number" step="0.01" className="w-full bg-gray-50 p-4 rounded-2xl outline-none" value={currentPayslip.rol} onChange={(e) => { const n = {...payslipData, [currentMonthKey]: {...currentPayslip, rol: e.target.value}}; setPayslipData(n); saveToCloud(n, "buste_paga"); }}/><div className={`p-4 rounded-2xl ${Math.abs(parseFloat(currentPayslip.rol || 0) - finalRes.rol) < 0.1 ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}><CheckCircle2 size={20}/></div></div></div>
             </div>
           </div>
 
           <div className="bg-blue-900 text-white p-7 rounded-[3rem] shadow-xl">
-            <h3 className="text-[10px] font-black uppercase opacity-40 mb-8 tracking-widest">Riepilogo Mensile</h3>
+            <h3 className="text-[10px] font-black uppercase opacity-40 mb-8 tracking-widest">Riepilogo Mese</h3>
             <div className="space-y-5 font-bold text-sm">
-              <div className="flex justify-between border-b border-white/10 pb-2"><span>Ore Lavoro</span><span>{monthStats.lavorate}h</span></div>
+              <div className="flex justify-between border-b border-white/10 pb-2"><span>Lavoro</span><span>{monthStats.lavorate}h</span></div>
               <div className="flex justify-between border-b border-white/10 pb-2 text-red-300"><span>Ferie (GG)</span><span>{monthStats.ferie}</span></div>
-              <div className="flex justify-between border-b border-white/10 pb-2 text-blue-300"><span>Permessi ROL</span><span>{monthStats.rol}h</span></div>
-              <div className="flex justify-between border-b border-white/10 pb-2 text-purple-300"><span>Permessi 104</span><span>{monthStats.p104}h</span></div>
+              <div className="flex justify-between border-b border-white/10 pb-2 text-blue-300"><span>ROL</span><span>{monthStats.rol}h</span></div>
+              <div className="flex justify-between border-b border-white/10 pb-2 text-purple-300"><span>104</span><span>{monthStats.p104}h</span></div>
               <div className="flex justify-between border-b border-white/10 pb-2 text-yellow-300"><span>Malattia</span><span>{monthStats.malattia}</span></div>
             </div>
           </div>
@@ -187,46 +188,42 @@ const WorkCalendar = () => {
       {/* MODALE SETUP */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-[100]">
-          <div className="bg-white rounded-[3.5rem] p-12 w-full max-w-md shadow-2xl">
-            <h2 className="text-3xl font-black mb-10">Parametri</h2>
+          <div className="bg-white rounded-[3.5rem] p-12 w-full max-w-md">
+            <h2 className="text-3xl font-black mb-8">Setup</h2>
             <div className="space-y-6">
-              <div><label className="text-[10px] font-black text-gray-400 uppercase">Mese Iniziale (Busta Paga)</label><input type="month" className="w-full bg-gray-50 p-5 rounded-2xl font-bold" value={balances.dataInizioSaldo} onChange={(e) => setBalances({...balances, dataInizioSaldo: e.target.value})}/></div>
+              <div><label className="text-[10px] font-black text-gray-400 uppercase">Mese Ultima Busta</label><input type="month" className="w-full bg-gray-50 p-5 rounded-2xl font-bold" value={balances.dataInizioSaldo} onChange={(e) => setBalances({...balances, dataInizioSaldo: e.target.value})}/></div>
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="text-[10px] font-black text-gray-400 uppercase">Saldo Ferie Iniziali</label><input type="text" className="w-full bg-gray-50 p-5 rounded-2xl font-bold" value={balances.ferieIniziali} onChange={(e) => setBalances({...balances, ferieIniziali: e.target.value})}/></div>
-                <div><label className="text-[10px] font-black text-gray-400 uppercase">Saldo ROL Iniziali</label><input type="text" className="w-full bg-gray-50 p-5 rounded-2xl font-bold" value={balances.rolIniziali} onChange={(e) => setBalances({...balances, rolIniziali: e.target.value})}/></div>
+                <div><label className="text-[10px] font-black text-gray-400 uppercase">Ferie in Busta</label><input type="text" className="w-full bg-gray-50 p-5 rounded-2xl font-bold" value={balances.ferieIniziali} onChange={(e) => setBalances({...balances, ferieIniziali: e.target.value})}/></div>
+                <div><label className="text-[10px] font-black text-gray-400 uppercase">ROL in Busta</label><input type="text" className="w-full bg-gray-50 p-5 rounded-2xl font-bold" value={balances.rolIniziali} onChange={(e) => setBalances({...balances, rolIniziali: e.target.value})}/></div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="text-[10px] font-black text-indigo-400 uppercase">Maturazione Ferie</label><input type="text" className="w-full bg-indigo-50 p-5 rounded-2xl font-bold border-2 border-indigo-100" value={balances.maturazioneFerie} onChange={(e) => setBalances({...balances, maturazioneFerie: e.target.value})}/></div>
-                <div><label className="text-[10px] font-black text-indigo-400 uppercase">Maturazione ROL</label><input type="text" className="w-full bg-indigo-50 p-5 rounded-2xl font-bold border-2 border-indigo-100" value={balances.maturazioneRol} onChange={(e) => setBalances({...balances, maturazioneRol: e.target.value})}/></div>
+                <div><label className="text-[10px] font-black text-indigo-400 uppercase">Mat. Ferie</label><input type="text" className="w-full bg-indigo-50 p-5 rounded-2xl font-bold" value={balances.maturazioneFerie} onChange={(e) => setBalances({...balances, maturazioneFerie: e.target.value})}/></div>
+                <div><label className="text-[10px] font-black text-indigo-400 uppercase">Mat. ROL</label><input type="text" className="w-full bg-indigo-50 p-5 rounded-2xl font-bold" value={balances.maturazioneRol} onChange={(e) => setBalances({...balances, maturazioneRol: e.target.value})}/></div>
               </div>
-              <button onClick={() => { saveToCloud(balances, "saldi_v4"); setShowSettings(false); }} className="w-full bg-indigo-600 text-white py-6 rounded-[2rem] font-black uppercase tracking-widest">Aggiorna</button>
+              <button onClick={() => { saveToCloud(balances, "saldi_v4"); setShowSettings(false); }} className="w-full bg-indigo-600 text-white py-6 rounded-[2rem] font-black">Aggiorna Saldi</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODALE GIORNO CON NOTE */}
+      {/* MODALE GIORNO */}
       {selectedDay && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-[3.5rem] p-12 w-full max-w-md border-4 border-blue-600 shadow-2xl">
-            <div className="flex justify-between items-center mb-8"><h2 className="text-3xl font-black text-blue-900 capitalize">{new Date(selectedDay.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric' })}</h2><button onClick={() => setSelectedDay(null)} className="p-3 bg-gray-100 rounded-full text-gray-400"><X/></button></div>
-            <div className="grid grid-cols-2 gap-3 mb-8">
+          <div className="bg-white rounded-[3.5rem] p-12 w-full max-w-md border-4 border-blue-600">
+            <div className="flex justify-between items-center mb-6"><h2 className="text-3xl font-black text-blue-900 capitalize">{new Date(selectedDay.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric' })}</h2><button onClick={() => setSelectedDay(null)} className="p-2 bg-gray-100 rounded-full"><X/></button></div>
+            <div className="grid grid-cols-2 gap-3 mb-6">
                 {["Lavoro", "Ferie Godute", "Permesso ROL", "Permesso 104", "Malattia", "Festivo", "Riposo"].map(t => (
                   <button key={t} onClick={() => setSelectedDay({...selectedDay, type: t, hours: (t === "Lavoro" ? 8 : (t === "Permesso 104" ? 2 : 0))})} 
-                  className={`p-5 rounded-[2rem] border-2 font-black text-[11px] uppercase transition-all ${selectedDay.type === t ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>{t}</button>
+                  className={`p-4 rounded-[1.5rem] border-2 font-black text-[10px] uppercase ${selectedDay.type === t ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-400'}`}>{t}</button>
                 ))}
             </div>
-            <div className="flex items-center justify-center gap-10 bg-blue-50 p-8 rounded-[3rem] mb-8 font-black">
-                <button onClick={() => setSelectedDay({...selectedDay, hours: Math.max(0, parseFloat(selectedDay.hours || 0) - 0.5)})} className="text-5xl text-blue-600">-</button>
-                <div className="text-center"><p className="text-xs uppercase text-blue-400 mb-2">Ore</p><span className="text-6xl text-blue-900">{selectedDay.hours}</span></div>
-                <button onClick={() => setSelectedDay({...selectedDay, hours: parseFloat(selectedDay.hours || 0) + 0.5})} className="text-5xl text-blue-600">+</button>
+            <div className="flex items-center justify-center gap-8 bg-blue-50 p-6 rounded-[2.5rem] mb-6 font-black">
+                <button onClick={() => setSelectedDay({...selectedDay, hours: Math.max(0, parseFloat(selectedDay.hours || 0) - 0.5)})} className="text-4xl">-</button>
+                <div className="text-center"><p className="text-[10px] uppercase text-blue-400">Ore</p><span className="text-5xl">{selectedDay.hours}</span></div>
+                <button onClick={() => setSelectedDay({...selectedDay, hours: parseFloat(selectedDay.hours || 0) + 0.5})} className="text-4xl">+</button>
             </div>
-            {/* CAMPO NOTA GIORNALIERA RIPRISTINATO */}
-            <div className="mb-8">
-              <label className="text-[10px] font-black text-gray-400 uppercase mb-2 block">Nota del giorno</label>
-              <textarea className="w-full bg-gray-50 border-2 border-gray-100 p-5 rounded-[1.5rem] h-24 text-sm outline-none focus:border-blue-400" placeholder="Aggiungi una nota per questo giorno..." value={selectedDay.notes || ""} onChange={(e) => setSelectedDay({...selectedDay, notes: e.target.value})}/>
-            </div>
-            <button onClick={() => { const nd = {...workData, [selectedDay.date]: selectedDay}; setWorkData(nd); saveToCloud(nd, "calendario"); setSelectedDay(null); }} className="w-full bg-blue-600 text-white py-7 rounded-[2.5rem] font-black text-2xl uppercase transition-all active:scale-95 shadow-xl shadow-blue-100">Salva Giorno</button>
+            <div className="mb-6"><label className="text-[10px] font-black text-gray-400 uppercase">Nota</label><textarea className="w-full bg-gray-50 p-4 rounded-2xl h-20 text-sm outline-none border-2 border-gray-100 focus:border-blue-400" value={selectedDay.notes || ""} onChange={(e) => setSelectedDay({...selectedDay, notes: e.target.value})}/></div>
+            <button onClick={() => { const nd = {...workData, [selectedDay.date]: selectedDay}; setWorkData(nd); saveToCloud(nd, "calendario"); setSelectedDay(null); }} className="w-full bg-blue-600 text-white py-6 rounded-[2rem] font-black uppercase">Salva</button>
           </div>
         </div>
       )}

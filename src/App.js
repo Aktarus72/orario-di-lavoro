@@ -70,19 +70,30 @@ const WorkCalendar = () => {
     "default": "bg-gray-100 text-gray-400 border-l-4 border-gray-300"
   };
 
+  // --- LOGICA DI CALCOLO AUTOMATICO ---
   const mStats = (() => {
     let s = { lavorate: 0, ferie: 0, rol: 0, p104: 0 };
     const m = currentDate.getMonth(), y = currentDate.getFullYear();
-    Object.keys(workData).forEach(k => {
-      const d = new Date(k);
-      if (d.getMonth() === m && d.getFullYear() === y) {
-        const e = workData[k];
+    const totalDays = new Date(y, m + 1, 0).getDate();
+    const holidays = getHolidays(y);
+
+    for (let d = 1; d <= totalDays; d++) {
+      const dStr = formatDate(y, m, d);
+      const dateObj = new Date(dStr);
+      
+      if (workData[dStr]) {
+        const e = workData[dStr];
         if (e.type === "Lavoro") s.lavorate += parseFloat(e.hours || 0);
         if (e.type === "Ferie Godute") s.ferie += 1;
         if (e.type === "Permesso ROL") s.rol += parseFloat(e.hours || 0);
         if (e.type === "Permesso 104") s.p104 += parseFloat(e.hours || 0);
+      } else {
+        // Se non salvato, applica default (Lavoro 8h feriale)
+        const isHoliday = !!holidays[dStr];
+        const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+        if (!isHoliday && !isWeekend) s.lavorate += 8;
       }
-    });
+    }
     return s;
   })();
 
@@ -100,7 +111,7 @@ const WorkCalendar = () => {
           <p className="text-[10px] font-bold text-gray-400 uppercase">Residuo ROL (H)</p>
           <p className="text-xl font-black">{resRol.toFixed(2)}</p>
         </div>
-        <div className="bg-white p-4 rounded-2xl border-b-4 border-indigo-500 flex justify-between items-center">
+        <div className="bg-white p-4 rounded-2xl border-b-4 border-indigo-500 flex justify-between items-center shadow-sm">
           <p className="text-[10px] font-bold text-gray-400 uppercase">Matura: <span className="text-gray-900">+{balances.maturazioneFerie}F / +{balances.maturazioneRol}R</span></p>
           <button onClick={() => setShowSettings(true)} className="p-1 bg-gray-100 rounded-md"><Settings size={16}/></button>
         </div>
@@ -109,9 +120,9 @@ const WorkCalendar = () => {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3 bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
           <div className="flex justify-between items-center mb-6">
-            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-2 bg-gray-100 rounded-full"><ChevronLeft/></button>
+            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"><ChevronLeft/></button>
             <h1 className="text-xl font-black capitalize">{currentDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' })}</h1>
-            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 bg-gray-100 rounded-full"><ChevronRight/></button>
+            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"><ChevronRight/></button>
           </div>
           <div className="grid grid-cols-7 gap-px bg-gray-100 border rounded-xl overflow-hidden">
             {['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'].map(d => <div key={d} className="bg-gray-50 p-2 text-center text-[10px] font-bold text-gray-400 uppercase">{d}</div>)}
@@ -145,18 +156,18 @@ const WorkCalendar = () => {
 
         <div className="space-y-4">
           <div className="bg-blue-900 text-white p-6 rounded-3xl shadow-xl">
-            <h3 className="text-xs font-bold uppercase opacity-50 mb-4 tracking-widest">Riepilogo Mese</h3>
-            <div className="space-y-3 font-bold text-sm">
-              <div className="flex justify-between"><span>Ore Lavoro</span><span>{mStats.lavorate}h</span></div>
-              <div className="flex justify-between text-red-300"><span>Ferie (GG)</span><span>{mStats.ferie}</span></div>
-              <div className="flex justify-between text-blue-300"><span>Permessi ROL</span><span>{mStats.rol}h</span></div>
-              <div className="flex justify-between text-purple-300"><span>Permessi 104</span><span>{mStats.p104}h</span></div>
+            <h3 className="text-[10px] font-bold uppercase opacity-50 mb-4 tracking-widest">Riepilogo {currentDate.toLocaleString('it-IT', { month: 'short' })}</h3>
+            <div className="space-y-4 font-bold text-sm">
+              <div className="flex justify-between items-end border-b border-white/10 pb-2"><span>Ore Lavoro</span><span className="text-lg">{mStats.lavorate}h</span></div>
+              <div className="flex justify-between items-end border-b border-white/10 pb-2 text-red-300"><span>Ferie (GG)</span><span className="text-lg">{mStats.ferie}</span></div>
+              <div className="flex justify-between items-end border-b border-white/10 pb-2 text-blue-300"><span>Permessi ROL</span><span className="text-lg">{mStats.rol}h</span></div>
+              <div className="flex justify-between items-end text-purple-300"><span>Permessi 104</span><span className="text-lg">{mStats.p104}h</span></div>
             </div>
           </div>
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
             <h3 className="font-bold mb-2 text-[10px] uppercase text-gray-400">Note del Mese</h3>
             <textarea className="w-full border-none p-3 rounded-xl h-40 text-sm bg-gray-50 outline-none" value={monthNotes[`${currentDate.getFullYear()}-${currentDate.getMonth()}`] || ""}
-              onChange={(e) => { const n = {...monthNotes, [`${currentDate.getFullYear()}-${currentDate.getMonth()}`]: e.target.value}; setMonthNotes(n); saveToCloud(n, "note"); }} placeholder="Scrivi qui..."/>
+              onChange={(e) => { const n = {...monthNotes, [`${currentDate.getFullYear()}-${currentDate.getMonth()}`]: e.target.value}; setMonthNotes(n); saveToCloud(n, "note"); }} placeholder="Segna errori busta paga..."/>
           </div>
         </div>
       </div>
@@ -166,13 +177,17 @@ const WorkCalendar = () => {
           <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-sm">
             <h2 className="text-xl font-black mb-6">Configurazione Saldi</h2>
             <div className="space-y-4">
-              <input type="text" className="w-full bg-gray-50 p-3 rounded-xl font-bold" value={balances.ferieIniziali} onChange={(e) => setBalances({...balances, ferieIniziali: e.target.value})} placeholder="Saldo Ferie"/>
-              <input type="text" className="w-full bg-gray-50 p-3 rounded-xl font-bold" value={balances.rolIniziali} onChange={(e) => setBalances({...balances, rolIniziali: e.target.value})} placeholder="Saldo ROL"/>
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase">Saldo Iniziale Ferie (GG)</label>
+              <input type="text" className="w-full bg-gray-50 p-3 rounded-xl font-bold" value={balances.ferieIniziali} onChange={(e) => setBalances({...balances, ferieIniziali: e.target.value})}/></div>
+              <div><label className="text-[10px] font-bold text-gray-400 uppercase">Saldo Iniziale ROL (H)</label>
+              <input type="text" className="w-full bg-gray-50 p-3 rounded-xl font-bold" value={balances.rolIniziali} onChange={(e) => setBalances({...balances, rolIniziali: e.target.value})}/></div>
               <div className="grid grid-cols-2 gap-2">
-                <input type="text" className="bg-blue-50 p-2 rounded-lg font-bold text-xs" value={balances.maturazioneFerie} onChange={(e) => setBalances({...balances, maturazioneFerie: e.target.value})}/>
-                <input type="text" className="bg-blue-50 p-2 rounded-lg font-bold text-xs" value={balances.maturazioneRol} onChange={(e) => setBalances({...balances, maturazioneRol: e.target.value})}/>
+                <div><label className="text-[8px] font-bold text-gray-400 uppercase">Matura Ferie</label>
+                <input type="text" className="w-full bg-blue-50 p-2 rounded-lg font-bold text-xs" value={balances.maturazioneFerie} onChange={(e) => setBalances({...balances, maturazioneFerie: e.target.value})}/></div>
+                <div><label className="text-[8px] font-bold text-gray-400 uppercase">Matura ROL</label>
+                <input type="text" className="w-full bg-blue-50 p-2 rounded-lg font-bold text-xs" value={balances.maturazioneRol} onChange={(e) => setBalances({...balances, maturazioneRol: e.target.value})}/></div>
               </div>
-              <button onClick={() => { saveToCloud(balances, "saldi_v3"); setShowSettings(false); }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black">Salva</button>
+              <button onClick={() => { saveToCloud(balances, "saldi_v3"); setShowSettings(false); }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase">Salva e Applica</button>
             </div>
           </div>
         </div>
@@ -189,12 +204,12 @@ const WorkCalendar = () => {
                 ))}
             </div>
             <div className="flex items-center justify-center gap-6 bg-blue-50 p-4 rounded-3xl mb-6 font-black">
-                <button onClick={() => setSelectedDay({...selectedDay, hours: Math.max(0, selectedDay.hours - 1)})} className="text-2xl text-blue-600">-</button>
+                <button onClick={() => setSelectedDay({...selectedDay, hours: Math.max(0, parseFloat(selectedDay.hours || 0) - 1)})} className="text-2xl text-blue-600">-</button>
                 <span className="text-3xl text-blue-900">{selectedDay.hours}h</span>
-                <button onClick={() => setSelectedDay({...selectedDay, hours: selectedDay.hours + 1})} className="text-2xl text-blue-600">+</button>
+                <button onClick={() => setSelectedDay({...selectedDay, hours: parseFloat(selectedDay.hours || 0) + 1})} className="text-2xl text-blue-600">+</button>
             </div>
-            <textarea className="w-full border-2 border-gray-100 p-4 rounded-2xl h-24 mb-6 text-sm outline-none" placeholder="Note giorno..." value={selectedDay.notes || ""} onChange={e => setSelectedDay({...selectedDay, notes: e.target.value})}/>
-            <button onClick={() => { const nd = {...workData, [selectedDay.date]: selectedDay}; setWorkData(nd); saveToCloud(nd, "calendario"); setSelectedDay(null); }} className="w-full bg-blue-600 text-white py-5 rounded-3xl font-black text-xl uppercase">Salva</button>
+            <textarea className="w-full border-2 border-gray-100 p-4 rounded-2xl h-24 mb-6 text-sm outline-none" placeholder="Aggiungi nota al giorno..." value={selectedDay.notes || ""} onChange={e => setSelectedDay({...selectedDay, notes: e.target.value})}/>
+            <button onClick={() => { const nd = {...workData, [selectedDay.date]: selectedDay}; setWorkData(nd); saveToCloud(nd, "calendario"); setSelectedDay(null); }} className="w-full bg-blue-600 text-white py-5 rounded-3xl font-black text-xl uppercase">Salva Turno</button>
           </div>
         </div>
       )}

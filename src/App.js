@@ -1,20 +1,57 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Save, FileText, Plus, X, Download, CheckCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, Plus, X, Download } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
+// --- INIZIO CONFIGURAZIONE FIREBASE ---
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAmJ_-P3Fp8uZBZmlS-bctgY0eska_WRqQ",
+  authDomain: "i-miei-turni-13fd9.firebaseapp.com",
+  projectId: "i-miei-turni-13fd9",
+  storageBucket: "i-miei-turni-13fd9.firebasestorage.app",
+  messagingSenderId: "1073304983291",
+  appId: "1:1073304983291:web:6221fd13d4ceea0010425e"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+// --- FINE CONFIGURAZIONE FIREBASE ---
+
 const WorkCalendar = () => {
-  const [workData, setWorkData] = useState(() => JSON.parse(localStorage.getItem('workData')) || {});
-  const [shiftTypes, setShiftTypes] = useState(() => JSON.parse(localStorage.getItem('shiftTypes')) || ["Lavoro", "Ferie", "Permesso", "Malattia", "Festivo", "Riposo", "Smart Working"]);
-  const [monthNotes, setMonthNotes] = useState(() => JSON.parse(localStorage.getItem('monthNotes')) || {});
+  const [workData, setWorkData] = useState({});
+  const [shiftTypes, setShiftTypes] = useState(["Lavoro", "Ferie", "Permesso", "Malattia", "Festivo", "Riposo", "Smart Working"]);
+  const [monthNotes, setMonthNotes] = useState({});
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(null);
   const [showAddType, setShowAddType] = useState(false);
   const [newTypeName, setNewTypeName] = useState("");
 
-  useEffect(() => { localStorage.setItem('workData', JSON.stringify(workData)); }, [workData]);
-  useEffect(() => { localStorage.setItem('shiftTypes', JSON.stringify(shiftTypes)); }, [shiftTypes]);
-  useEffect(() => { localStorage.setItem('monthNotes', JSON.stringify(monthNotes)); }, [monthNotes]);
+  // ASCOLTA I CAMBIAMENTI DAL DATABASE (Sincronizzazione Real-time)
+  useEffect(() => {
+    const unsubWork = onSnapshot(doc(db, "dati", "calendario"), (docSnap) => {
+      if (docSnap.exists()) setWorkData(docSnap.data());
+    });
+    const unsubTypes = onSnapshot(doc(db, "dati", "configurazione"), (docSnap) => {
+      if (docSnap.exists()) setShiftTypes(docSnap.data().types || []);
+    });
+    const unsubNotes = onSnapshot(doc(db, "dati", "note"), (docSnap) => {
+      if (docSnap.exists()) setMonthNotes(docSnap.data());
+    });
+
+    return () => { unsubWork(); unsubTypes(); unsubNotes(); };
+  }, []);
+
+  // FUNZIONE PER SALVARE SU CLOUD
+  const saveToCloud = async (newData, path) => {
+    try {
+      await setDoc(doc(db, "dati", path), newData);
+    } catch (e) {
+      console.error("Errore salvataggio Cloud:", e);
+    }
+  };
 
   const getHolidays = (year) => {
     const f = Math.floor, G = year % 19, C = f(year / 100), H = (C - f(C / 4) - f((8 * C + 13) / 25) + 19 * G + 15) % 30,
@@ -44,15 +81,12 @@ const WorkCalendar = () => {
   };
 
   const generatePDF = () => {
-    const doc = new jsPDF();
+    const docPdf = new jsPDF();
     const monthLabel = currentDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' });
-    doc.setFontSize(18); doc.text(`Prospetto Ore Lavoro - ${monthLabel}`, 14, 20);
-    
+    docPdf.setFontSize(18); docPdf.text(`Prospetto Ore Lavoro - ${monthLabel}`, 14, 20);
     const s = getSummary();
-    doc.setFontSize(10);
-    doc.text(`Riepilogo Busta Paga:`, 14, 30);
-    doc.text(`LAVORO: ${s.oreLavoro}h (${(s.oreLavoro/8).toFixed(1)}gg) | FERIE: ${s.oreFerie}h (${(s.oreFerie/8).toFixed(1)}gg) | MALATTIA: ${s.oreMalattia}h | PERMESSI: ${s.orePermessi}h`, 14, 36);
-
+    docPdf.setFontSize(10);
+    docPdf.text(`Riepilogo: LAVORO: ${s.oreLavoro}h | FERIE: ${s.oreFerie}h | MALATTIA: ${s.oreMalattia}h`, 14, 30);
     const rows = [];
     const totalDays = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
     for (let d = 1; d <= totalDays; d++) {
@@ -60,12 +94,8 @@ const WorkCalendar = () => {
       const data = workData[dStr] || getDefaultShift(dStr);
       rows.push([`${d} ${new Date(dStr).toLocaleDateString('it-IT', {weekday:'short'})}`, data.type, `${data.hours}h`, data.notes || ""]);
     }
-
-    doc.autoTable({ head: [['Giorno', 'Voce', 'Quantità', 'Note']], body: rows, startY: 42, theme: 'grid', headStyles: {fillColor:[37,99,235]} });
-    
-    // Forza apertura in nuova scheda su iPad
-    const pdfOutput = doc.output('bloburl');
-    window.open(pdfOutput, '_blank');
+    docPdf.autoTable({ head: [['Giorno', 'Voce', 'Quantità', 'Note']], body: rows, startY: 40, theme: 'grid' });
+    window.open(docPdf.output('bloburl'), '_blank');
   };
 
   const getSummary = () => {
@@ -85,7 +115,6 @@ const WorkCalendar = () => {
   };
 
   const summary = getSummary();
-
   const shiftColors = {
     "Lavoro": "bg-blue-100 text-blue-800 border-l-4 border-blue-600",
     "Ferie": "bg-emerald-100 text-emerald-900 border-l-4 border-emerald-600",
@@ -106,30 +135,21 @@ const WorkCalendar = () => {
             <h1 className="text-xl font-black capitalize w-48 text-center">{currentDate.toLocaleString('it-IT', { month: 'long', year: 'numeric' })}</h1>
             <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 bg-gray-100 rounded-full active:bg-gray-300"><ChevronRight /></button>
           </div>
-          
           <div className="flex flex-wrap justify-center gap-2">
             <div className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-center shadow">
               <p className="text-[9px] uppercase font-bold">Ore Lav.</p>
               <p className="text-lg font-black">{summary.oreLavoro + summary.oreSmart}h</p>
             </div>
-            <div className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-center shadow">
-              <p className="text-[9px] uppercase font-bold">Ferie</p>
-              <p className="text-lg font-black">{summary.oreFerie}h</p>
-            </div>
-            <div className="bg-amber-500 text-white px-3 py-1.5 rounded-lg text-center shadow">
-              <p className="text-[9px] uppercase font-bold">Permessi</p>
-              <p className="text-lg font-black">{summary.orePermessi}h</p>
-            </div>
-            <button onClick={generatePDF} className="bg-gray-900 text-white px-5 py-2 rounded-xl flex items-center gap-2 font-bold active:scale-95 transition-transform">
-              <Download size={20}/> GENERA PDF
+            <button onClick={generatePDF} className="bg-gray-900 text-white px-5 py-2 rounded-xl flex items-center gap-2 font-bold active:scale-95">
+              <Download size={20}/> PDF
             </button>
           </div>
         </div>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <div className="lg:col-span-3 bg-white p-2 rounded-2xl shadow-sm overflow-hidden">
-          <div className="grid grid-cols-7 text-center font-bold text-gray-400 mb-2 uppercase text-[10px] tracking-tighter">
+        <div className="lg:col-span-3 bg-white p-2 rounded-2xl shadow-sm">
+          <div className="grid grid-cols-7 text-center font-bold text-gray-400 mb-2 uppercase text-[10px]">
             {['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'].map(d => <div key={d}>{d}</div>)}
           </div>
           <div className="grid grid-cols-7 border-l border-t border-gray-100">
@@ -143,18 +163,14 @@ const WorkCalendar = () => {
                 const dStr = formatDate(year, month, d);
                 const data = workData[dStr] || getDefaultShift(dStr);
                 days.push(
-                  <div key={d} onClick={() => { const dateStr = formatDate(currentDate.getFullYear(), currentDate.getMonth(), d); setSelectedDay({ ...(workData[dateStr] || getDefaultShift(dateStr)), date: dateStr }); }} 
-                       className="h-24 border-r border-b border-gray-100 p-1 cursor-pointer hover:bg-blue-50 bg-white transition-colors">
-                    <div className="flex justify-between items-start">
+                  <div key={d} onClick={() => setSelectedDay({ ...(workData[dStr] || getDefaultShift(dStr)), date: dStr })} 
+                       className="h-24 border-r border-b border-gray-100 p-1 cursor-pointer hover:bg-blue-50 bg-white">
+                    <div className="flex justify-between">
                       <span className={`text-[10px] font-bold ${data.type === "Festivo" ? 'text-red-500' : 'text-gray-400'}`}>{d}</span>
-                      {data.label && <span className="text-[7px] uppercase font-bold text-red-400 leading-none truncate w-12 text-right">{data.label}</span>}
                     </div>
                     <div className={`text-[9px] rounded p-1 h-[55px] mt-1 flex flex-col justify-between ${shiftColors[data.type] || shiftColors.default}`}>
-                      <div className="font-bold truncate leading-tight uppercase">{data.type}</div>
-                      <div className="flex justify-between items-end font-black text-xs">
-                          <span>{data.hours > 0 ? `${data.hours}h` : ''}</span>
-                          {data.notes && <FileText size={10} className="opacity-50"/>}
-                      </div>
+                      <div className="font-bold truncate uppercase">{data.type}</div>
+                      <div className="font-black text-xs">{data.hours > 0 ? `${data.hours}h` : ''}</div>
                     </div>
                   </div>
                 );
@@ -163,54 +179,50 @@ const WorkCalendar = () => {
             })()}
           </div>
         </div>
-
         <div className="space-y-4">
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-            <h3 className="font-bold mb-2 text-xs uppercase text-gray-400 tracking-widest">Appunti Mese</h3>
+            <h3 className="font-bold mb-2 text-xs uppercase text-gray-400">Appunti Mese</h3>
             <textarea 
-              className="w-full border border-gray-100 p-3 rounded-xl h-24 text-sm outline-none focus:ring-2 focus:ring-blue-100 bg-gray-50 shadow-inner"
+              className="w-full border border-gray-100 p-3 rounded-xl h-24 text-sm outline-none bg-gray-50"
               value={monthNotes[currentMonthKey] || ""}
-              onChange={(e) => setMonthNotes({...monthNotes, [currentMonthKey]: e.target.value})}
-              placeholder="Esempio: Trasferte, Bonus..."
+              onChange={(e) => {
+                const newNotes = {...monthNotes, [currentMonthKey]: e.target.value};
+                setMonthNotes(newNotes);
+                saveToCloud(newNotes, "note");
+              }}
             />
-          </div>
-          <div className="bg-blue-900 text-white p-4 rounded-2xl shadow-lg">
-             <h4 className="text-[10px] uppercase font-bold mb-2 opacity-70 tracking-widest">Totali in Giorni (8h)</h4>
-             <p className="text-sm font-medium">Lavoro: <b>{(summary.oreLavoro / 8).toFixed(1)} gg</b></p>
-             <p className="text-sm font-medium">Ferie: <b>{(summary.oreFerie / 8).toFixed(1)} gg</b></p>
-             <p className="text-sm font-medium border-t border-white/20 mt-2 pt-2 italic text-xs opacity-80 underline cursor-pointer" onClick={() => setWorkData({})}>Azzera calendario</p>
           </div>
         </div>
       </div>
 
       {selectedDay && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-[2.5rem] p-6 w-full max-w-lg shadow-2xl border-4 border-blue-600">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-[2.5rem] p-6 w-full max-w-lg border-4 border-blue-600">
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-black capitalize text-blue-900">{new Date(selectedDay.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric' })}</h2>
-                <button onClick={() => setSelectedDay(null)} className="p-3 bg-gray-100 rounded-full text-gray-400 active:scale-90"><X size={24}/></button>
+                <h2 className="text-2xl font-black text-blue-900">{new Date(selectedDay.date).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric' })}</h2>
+                <button onClick={() => setSelectedDay(null)} className="p-3 bg-gray-100 rounded-full text-gray-400"><X size={24}/></button>
             </div>
             <div className="grid grid-cols-3 gap-2.5 mb-6">
                 {shiftTypes.map(t => (
                     <button key={t} onClick={() => setSelectedDay({...selectedDay, type: t, hours: 8})} 
-                            className={`p-3 rounded-2xl border-2 text-[10px] font-black transition-all uppercase ${selectedDay.type === t ? 'bg-blue-600 text-white border-blue-600 shadow-lg scale-105' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>{t}</button>
+                            className={`p-3 rounded-2xl border-2 text-[10px] font-black transition-all uppercase ${selectedDay.type === t ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-gray-50 text-gray-400'}`}>{t}</button>
                 ))}
-                {showAddType ? (
-                    <div className="col-span-2 flex gap-1"><input autoFocus className="border p-2 rounded-lg text-xs w-full bg-blue-50" value={newTypeName} onChange={e => setNewTypeName(e.target.value)}/><button onClick={() => {if(newTypeName){setShiftTypes([...shiftTypes, newTypeName]); setNewTypeName(""); setShowAddType(false);}}} className="bg-blue-600 text-white p-2 rounded-lg"><Plus size={16}/></button></div>
-                ) : (
-                    <button onClick={() => setShowAddType(true)} className="p-3 rounded-2xl border-2 border-dashed border-gray-300 text-[10px] font-black text-gray-400">+ VOCE</button>
-                )}
+                <button onClick={() => setShowAddType(!showAddType)} className="p-3 rounded-2xl border-2 border-dashed border-gray-300 text-[10px] font-black text-gray-400">+ VOCE</button>
             </div>
-            <div className="bg-blue-50 p-5 rounded-3xl mb-6 flex items-center justify-between border-2 border-blue-100">
-                <span className="text-xs font-black text-blue-400 uppercase tracking-widest">Regola Ore</span>
-                <div className="flex items-center gap-6">
-                    <button onClick={() => setSelectedDay({...selectedDay, hours: Math.max(0, selectedDay.hours - 1)})} className="w-14 h-14 bg-white border-2 border-blue-200 rounded-full font-black text-3xl text-blue-600 shadow-md active:bg-blue-100">-</button>
+            <div className="bg-blue-50 p-5 rounded-3xl mb-6 flex items-center justify-between">
+                <div className="flex items-center gap-6 mx-auto">
+                    <button onClick={() => setSelectedDay({...selectedDay, hours: Math.max(0, selectedDay.hours - 1)})} className="w-14 h-14 bg-white border-2 border-blue-200 rounded-full font-black text-3xl text-blue-600">-</button>
                     <span className="text-5xl font-black text-blue-800 w-16 text-center">{selectedDay.hours}</span>
-                    <button onClick={() => setSelectedDay({...selectedDay, hours: selectedDay.hours + 1})} className="w-14 h-14 bg-white border-2 border-blue-200 rounded-full font-black text-3xl text-blue-600 shadow-md active:bg-blue-100">+</button>
+                    <button onClick={() => setSelectedDay({...selectedDay, hours: selectedDay.hours + 1})} className="w-14 h-14 bg-white border-2 border-blue-200 rounded-full font-black text-3xl text-blue-600">+</button>
                 </div>
             </div>
-            <textarea className="w-full border-2 border-gray-100 p-4 rounded-3xl h-24 mb-6 text-sm outline-none focus:border-blue-300 transition-colors shadow-inner bg-gray-50" placeholder="Note per questo giorno..." value={selectedDay.notes || ""} onChange={e => setSelectedDay({...selectedDay, notes: e.target.value})}/>
-            <button onClick={() => {setWorkData({...workData, [selectedDay.date]: selectedDay}); setSelectedDay(null);}} className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black text-xl shadow-xl active:scale-95 transition-all uppercase tracking-widest">Salva Modifiche</button>
+            <textarea className="w-full border-2 border-gray-100 p-4 rounded-3xl h-24 mb-6 text-sm bg-gray-50" placeholder="Note..." value={selectedDay.notes || ""} onChange={e => setSelectedDay({...selectedDay, notes: e.target.value})}/>
+            <button onClick={() => {
+              const newData = {...workData, [selectedDay.date]: selectedDay};
+              setWorkData(newData);
+              saveToCloud(newData, "calendario");
+              setSelectedDay(null);
+            }} className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black text-xl shadow-xl uppercase">Salva su Cloud</button>
           </div>
         </div>
       )}

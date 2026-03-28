@@ -80,20 +80,30 @@ const WorkCalendar = () => {
   };
 
   const finalRes = calculateResidui();
+
+  // --- LOGICA TOTALI SISTEMATA ---
   const monthStats = (() => {
     let s = { lavorate: 0, ferie: 0, rol: 0, p104: 0, malattia: 0 };
     const m = currentDate.getMonth(), y = currentDate.getFullYear();
     const totalDays = new Date(y, m + 1, 0).getDate();
+    const holidays = getHolidays(y);
+
     for (let d = 1; d <= totalDays; d++) {
       const dStr = formatDate(y, m, d);
-      if (workData[dStr]) {
-        const e = workData[dStr];
-        if (e.type === "Lavoro") s.lavorate += parseFloat(e.hours || 0);
-        if (e.type === "Ferie Godute") s.ferie += 1;
-        if (e.type === "Permesso ROL") s.rol += parseFloat(e.hours || 0);
-        if (e.type === "Permesso 104") s.p104 += parseFloat(e.hours || 0);
-        if (e.type === "Malattia") s.malattia += 1;
-      }
+      const isHoliday = holidays[dStr];
+      const isWeekend = new Date(dStr).getDay() === 0 || new Date(dStr).getDay() === 6;
+      
+      // Se esiste dato salvato, usa quello. Altrimenti usa il default (8h se feriale, 0h se riposo/festa)
+      const data = workData[dStr] || { 
+        type: isHoliday ? "Festivo" : (isWeekend ? "Riposo" : "Lavoro"), 
+        hours: (isHoliday || isWeekend) ? 0 : 8 
+      };
+
+      if (data.type === "Lavoro") s.lavorate += parseFloat(data.hours || 0);
+      if (data.type === "Ferie Godute") s.ferie += 1;
+      if (data.type === "Permesso ROL") s.rol += parseFloat(data.hours || 0);
+      if (data.type === "Permesso 104") s.p104 += parseFloat(data.hours || 0);
+      if (data.type === "Malattia") s.malattia += 1;
     }
     return s;
   })();
@@ -102,7 +112,6 @@ const WorkCalendar = () => {
 
   return (
     <div className="max-w-7xl mx-auto p-4 bg-slate-50 min-h-screen font-sans pb-10 text-slate-900 tracking-tight">
-      {/* HEADER SALDI */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="p-5 rounded-[2rem] bg-white border-b-4 border-green-500 shadow-sm text-center">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Residuo Ferie</p>
@@ -122,7 +131,6 @@ const WorkCalendar = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* CALENDARIO */}
         <div className="lg:col-span-3 bg-white p-6 rounded-[3rem] shadow-sm border border-slate-100">
           <div className="flex justify-between items-center mb-8 px-4">
             <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-3 bg-slate-100 rounded-full"><ChevronLeft/></button>
@@ -159,7 +167,6 @@ const WorkCalendar = () => {
           </div>
         </div>
 
-        {/* COLONNA DESTRA */}
         <div className="space-y-4">
           <div className="bg-white p-7 rounded-[3rem] shadow-xl border-2 border-orange-100">
             <h3 className="text-xs font-black uppercase text-orange-500 mb-6 flex items-center gap-2"><AlertTriangle size={20}/> Controllo Busta</h3>
@@ -198,7 +205,6 @@ const WorkCalendar = () => {
         </div>
       </div>
 
-      {/* MODALI */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-[100]">
           <div className="bg-white rounded-[3.5rem] p-12 w-full max-w-md shadow-2xl relative">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Settings, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings, X, AlertTriangle, CheckCircle2, AlertCircle } from 'lucide-react';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
@@ -68,8 +68,10 @@ const WorkCalendar = () => {
     resF += (matF * diffMesi);
     resR += (matR * diffMesi);
     Object.keys(workData).forEach(dateStr => {
-      const [y, m, d] = dateStr.split('-').map(Number);
-      if (new Date(y, m-1) > new Date(startYear, startMonth) && new Date(y, m-1) <= new Date(currentYear, currentMonth)) {
+      const parts = dateStr.split('-');
+      const dY = parseInt(parts[0]);
+      const dM = parseInt(parts[1]) - 1;
+      if (new Date(dY, dM) > new Date(startYear, startMonth) && new Date(dY, dM) <= new Date(currentYear, currentMonth)) {
         if (workData[dateStr].type === "Ferie Godute") resF -= 1;
         if (workData[dateStr].type === "Permesso ROL") resR -= parseFloat(workData[dateStr].hours || 0);
       }
@@ -96,9 +98,11 @@ const WorkCalendar = () => {
     return s;
   })();
 
+  const currentPayslip = payslipData[currentMonthKey] || { ferie: "", rol: "" };
+
   return (
     <div className="max-w-7xl mx-auto p-4 bg-slate-50 min-h-screen font-sans pb-10 text-slate-900 tracking-tight">
-      {/* HEADER SALDI CON TESTO MATURAZIONE INGRANDITO */}
+      {/* HEADER SALDI */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="p-5 rounded-[2rem] bg-white border-b-4 border-green-500 shadow-sm text-center">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Residuo Ferie</p>
@@ -155,30 +159,32 @@ const WorkCalendar = () => {
           </div>
         </div>
 
-        {/* COLONNA DESTRA CON TESTI INGRANDITI */}
+        {/* COLONNA DESTRA */}
         <div className="space-y-4">
-          {/* CONTROLLO BUSTA INGRANDITO */}
           <div className="bg-white p-7 rounded-[3rem] shadow-xl border-2 border-orange-100">
             <h3 className="text-xs font-black uppercase text-orange-500 mb-6 flex items-center gap-2"><AlertTriangle size={20}/> Controllo Busta</h3>
             <div className="space-y-5">
                 <div>
                   <label className="text-[11px] font-black text-slate-400 uppercase ml-1">Ferie Busta</label>
                   <div className="flex gap-2 items-center">
-                    <input type="number" step="0.01" className="w-full bg-slate-50 p-5 rounded-2xl font-black text-xl border-none outline-none mt-1 shadow-inner" value={payslipData[currentMonthKey]?.ferie || ""} onChange={(e) => { const n = {...payslipData, [currentMonthKey]: {...(payslipData[currentMonthKey] || {}), ferie: e.target.value}}; setPayslipData(n); saveToCloud(n, "buste_paga"); }}/>
-                    <div className={`p-4 rounded-xl ${Math.abs(parseFloat(payslipData[currentMonthKey]?.ferie || 0) - finalRes.ferie) < 0.1 ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-300'}`}><CheckCircle2 size={24}/></div>
+                    <input type="number" step="0.01" className="w-full bg-slate-50 p-5 rounded-2xl font-black text-xl border-none outline-none mt-1 shadow-inner" value={currentPayslip.ferie} onChange={(e) => { const n = {...payslipData, [currentMonthKey]: {...currentPayslip, ferie: e.target.value}}; setPayslipData(n); saveToCloud(n, "buste_paga"); }}/>
+                    <div className={`p-4 rounded-xl transition-colors ${Math.abs(parseFloat(currentPayslip.ferie || 0) - finalRes.ferie) < 0.1 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                        {Math.abs(parseFloat(currentPayslip.ferie || 0) - finalRes.ferie) < 0.1 ? <CheckCircle2 size={24}/> : <AlertCircle size={24}/>}
+                    </div>
                   </div>
                 </div>
                 <div>
                   <label className="text-[11px] font-black text-slate-400 uppercase ml-1">ROL Busta</label>
                   <div className="flex gap-2 items-center">
-                    <input type="number" step="0.01" className="w-full bg-slate-50 p-5 rounded-2xl font-black text-xl border-none outline-none mt-1 shadow-inner" value={payslipData[currentMonthKey]?.rol || ""} onChange={(e) => { const n = {...payslipData, [currentMonthKey]: {...(payslipData[currentMonthKey] || {}), rol: e.target.value}}; setPayslipData(n); saveToCloud(n, "buste_paga"); }}/>
-                    <div className={`p-4 rounded-xl ${Math.abs(parseFloat(payslipData[currentMonthKey]?.rol || 0) - finalRes.rol) < 0.1 ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-300'}`}><CheckCircle2 size={24}/></div>
+                    <input type="number" step="0.01" className="w-full bg-slate-50 p-5 rounded-2xl font-black text-xl border-none outline-none mt-1 shadow-inner" value={currentPayslip.rol} onChange={(e) => { const n = {...payslipData, [currentMonthKey]: {...currentPayslip, rol: e.target.value}}; setPayslipData(n); saveToCloud(n, "buste_paga"); }}/>
+                    <div className={`p-4 rounded-xl transition-colors ${Math.abs(parseFloat(currentPayslip.rol || 0) - finalRes.rol) < 0.1 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                        {Math.abs(parseFloat(currentPayslip.rol || 0) - finalRes.rol) < 0.1 ? <CheckCircle2 size={24}/> : <AlertCircle size={24}/>}
+                    </div>
                   </div>
                 </div>
             </div>
           </div>
 
-          {/* RIEPILOGO MESE INGRANDITO */}
           <div className="bg-slate-900 text-white p-8 rounded-[3rem] shadow-xl">
             <h3 className="text-xs font-black uppercase opacity-40 mb-8 tracking-widest text-center">Riepilogo Mensile</h3>
             <div className="space-y-6 font-black text-base">
@@ -192,7 +198,7 @@ const WorkCalendar = () => {
         </div>
       </div>
 
-      {/* MODALI RIMASTI INVARIATI */}
+      {/* MODALI */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-[100]">
           <div className="bg-white rounded-[3.5rem] p-12 w-full max-w-md shadow-2xl relative">

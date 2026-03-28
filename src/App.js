@@ -40,15 +40,12 @@ const WorkCalendar = () => {
   const formatDate = (y, m, d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   const currentMonthKey = `${currentDate.getFullYear()}-${currentDate.getMonth()}`;
 
-  // Calcolo Festività incluse Pasqua e Pasquetta
   const getHolidays = (year) => {
     const f = Math.floor, G = year % 19, C = f(year / 100), H = (C - f(C / 4) - f((8 * C + 13) / 25) + 19 * G + 15) % 30,
           I = H - f(H / 28) * (1 - f(29 / (H + 1)) * f((21 - G) / 11)), J = (year + f(year / 4) + I + 2 - C + f(C / 4)) % 7,
           L = I - J, month = 3 + f((L + 40) / 44), day = L + 28 - 31 * f(month / 4);
-    
     const pasqua = formatDate(year, month - 1, day);
     const pasquetta = formatDate(year, month - 1, day + 1);
-
     return { 
       [`${year}-01-01`]: "Capodanno", [`${year}-01-06`]: "Epifania", [`${year}-04-25`]: "Liberazione", 
       [`${year}-05-01`]: "Festa Lavoro", [`${year}-06-02`]: "Repubblica", [`${year}-08-15`]: "Ferragosto", 
@@ -62,31 +59,21 @@ const WorkCalendar = () => {
     const startMonth = startMonthStr - 1;
     const currentMonth = currentDate.getMonth();
     const currentYear = currentDate.getFullYear();
-
     let resF = parseFloat(balances.ferieIniziali || 0);
     let resR = parseFloat(balances.rolIniziali || 0);
     const matF = parseFloat(balances.maturazioneFerie || 0);
     const matR = parseFloat(balances.maturazioneRol || 0);
-
-    if (currentYear < startYear || (currentYear === startYear && currentMonth <= startMonth)) {
-      return { ferie: resF, rol: resR };
-    }
-
+    if (currentYear < startYear || (currentYear === startYear && currentMonth <= startMonth)) return { ferie: resF, rol: resR };
     const diffMesi = (currentYear - startYear) * 12 + (currentMonth - startMonth);
     resF += (matF * diffMesi);
     resR += (matR * diffMesi);
-
     Object.keys(workData).forEach(dateStr => {
-      const parts = dateStr.split('-');
-      const dY = parseInt(parts[0]);
-      const dM = parseInt(parts[1]) - 1;
-      
-      if (new Date(dY, dM) > new Date(startYear, startMonth) && new Date(dY, dM) <= new Date(currentYear, currentMonth)) {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      if (new Date(y, m-1) > new Date(startYear, startMonth) && new Date(y, m-1) <= new Date(currentYear, currentMonth)) {
         if (workData[dateStr].type === "Ferie Godute") resF -= 1;
         if (workData[dateStr].type === "Permesso ROL") resR -= parseFloat(workData[dateStr].hours || 0);
       }
     });
-
     return { ferie: resF, rol: resR };
   };
 
@@ -110,23 +97,28 @@ const WorkCalendar = () => {
   })();
 
   return (
-    <div className="max-w-7xl mx-auto p-4 bg-slate-50 min-h-screen font-sans pb-10 text-slate-900">
+    <div className="max-w-7xl mx-auto p-4 bg-slate-50 min-h-screen font-sans pb-10 text-slate-900 tracking-tight">
+      {/* HEADER SALDI CON TESTO MATURAZIONE INGRANDITO */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="p-5 rounded-[2rem] bg-white border-b-4 border-green-500 shadow-sm text-center">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mio Residuo Ferie</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Residuo Ferie</p>
           <p className="text-3xl font-black">{finalRes.ferie.toFixed(2)}</p>
         </div>
         <div className="p-5 rounded-[2rem] bg-white border-b-4 border-blue-500 shadow-sm text-center">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mio Residuo ROL</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Residuo ROL</p>
           <p className="text-3xl font-black">{finalRes.rol.toFixed(2)}</p>
         </div>
         <div className="bg-white p-5 rounded-[2rem] border-b-4 border-indigo-500 flex justify-between items-center shadow-sm">
-          <div className="text-xs font-black text-indigo-600">+{balances.maturazioneFerie}F / +{balances.maturazioneRol}R</div>
-          <button onClick={() => setShowSettings(true)} className="p-3 bg-slate-50 rounded-2xl"><Settings size={20}/></button>
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Maturazione</p>
+            <p className="text-2xl font-black text-indigo-600">+{balances.maturazioneFerie}F / +{balances.maturazioneRol}R</p>
+          </div>
+          <button onClick={() => setShowSettings(true)} className="p-3 bg-slate-50 rounded-2xl hover:bg-indigo-50"><Settings size={24}/></button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* CALENDARIO */}
         <div className="lg:col-span-3 bg-white p-6 rounded-[3rem] shadow-sm border border-slate-100">
           <div className="flex justify-between items-center mb-8 px-4">
             <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-3 bg-slate-100 rounded-full"><ChevronLeft/></button>
@@ -146,10 +138,7 @@ const WorkCalendar = () => {
                 const dStr = formatDate(year, month, d);
                 const isHoliday = holidays[dStr];
                 const isWeekend = new Date(dStr).getDay() === 0 || new Date(dStr).getDay() === 6;
-                const data = workData[dStr] || { 
-                  type: isHoliday ? "Festivo" : (isWeekend ? "Riposo" : "Lavoro"), 
-                  hours: (isHoliday || isWeekend) ? 0 : 8 
-                };
+                const data = workData[dStr] || { type: isHoliday ? "Festivo" : (isWeekend ? "Riposo" : "Lavoro"), hours: (isHoliday || isWeekend) ? 0 : 8 };
                 days.push(
                   <div key={d} onClick={() => setSelectedDay({...data, date: dStr})} className="h-36 bg-white p-3 cursor-pointer hover:bg-blue-50 transition-all border-[0.5px] border-slate-50 relative">
                     <div className="flex justify-between items-start mb-2"><span className="text-xs font-black text-slate-300">{d}</span>{isHoliday && <span className="text-[7px] bg-red-100 text-red-600 px-2 py-1 rounded-lg font-black uppercase">{isHoliday}</span>}</div>
@@ -166,40 +155,44 @@ const WorkCalendar = () => {
           </div>
         </div>
 
+        {/* COLONNA DESTRA CON TESTI INGRANDITI */}
         <div className="space-y-4">
+          {/* CONTROLLO BUSTA INGRANDITO */}
           <div className="bg-white p-7 rounded-[3rem] shadow-xl border-2 border-orange-100">
-            <h3 className="text-[10px] font-black uppercase text-orange-500 mb-6 flex items-center gap-2"><AlertTriangle size={16}/> Controllo Busta</h3>
-            <div className="space-y-4">
+            <h3 className="text-xs font-black uppercase text-orange-500 mb-6 flex items-center gap-2"><AlertTriangle size={20}/> Controllo Busta</h3>
+            <div className="space-y-5">
                 <div>
-                  <label className="text-[9px] font-black text-slate-400 uppercase">Residuo Ferie Busta</label>
+                  <label className="text-[11px] font-black text-slate-400 uppercase ml-1">Ferie Busta</label>
                   <div className="flex gap-2 items-center">
-                    <input type="number" step="0.01" className="w-full bg-slate-50 p-4 rounded-2xl font-bold border-none outline-none mt-1" value={payslipData[currentMonthKey]?.ferie || ""} onChange={(e) => { const n = {...payslipData, [currentMonthKey]: {...(payslipData[currentMonthKey] || {}), ferie: e.target.value}}; setPayslipData(n); saveToCloud(n, "buste_paga"); }}/>
-                    <div className={`p-3 rounded-xl ${Math.abs(parseFloat(payslipData[currentMonthKey]?.ferie || 0) - finalRes.ferie) < 0.1 ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-300'}`}><CheckCircle2 size={18}/></div>
+                    <input type="number" step="0.01" className="w-full bg-slate-50 p-5 rounded-2xl font-black text-xl border-none outline-none mt-1 shadow-inner" value={payslipData[currentMonthKey]?.ferie || ""} onChange={(e) => { const n = {...payslipData, [currentMonthKey]: {...(payslipData[currentMonthKey] || {}), ferie: e.target.value}}; setPayslipData(n); saveToCloud(n, "buste_paga"); }}/>
+                    <div className={`p-4 rounded-xl ${Math.abs(parseFloat(payslipData[currentMonthKey]?.ferie || 0) - finalRes.ferie) < 0.1 ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-300'}`}><CheckCircle2 size={24}/></div>
                   </div>
                 </div>
                 <div>
-                  <label className="text-[9px] font-black text-slate-400 uppercase">Residuo ROL Busta</label>
+                  <label className="text-[11px] font-black text-slate-400 uppercase ml-1">ROL Busta</label>
                   <div className="flex gap-2 items-center">
-                    <input type="number" step="0.01" className="w-full bg-slate-50 p-4 rounded-2xl font-bold border-none outline-none mt-1" value={payslipData[currentMonthKey]?.rol || ""} onChange={(e) => { const n = {...payslipData, [currentMonthKey]: {...(payslipData[currentMonthKey] || {}), rol: e.target.value}}; setPayslipData(n); saveToCloud(n, "buste_paga"); }}/>
-                    <div className={`p-3 rounded-xl ${Math.abs(parseFloat(payslipData[currentMonthKey]?.rol || 0) - finalRes.rol) < 0.1 ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-300'}`}><CheckCircle2 size={18}/></div>
+                    <input type="number" step="0.01" className="w-full bg-slate-50 p-5 rounded-2xl font-black text-xl border-none outline-none mt-1 shadow-inner" value={payslipData[currentMonthKey]?.rol || ""} onChange={(e) => { const n = {...payslipData, [currentMonthKey]: {...(payslipData[currentMonthKey] || {}), rol: e.target.value}}; setPayslipData(n); saveToCloud(n, "buste_paga"); }}/>
+                    <div className={`p-4 rounded-xl ${Math.abs(parseFloat(payslipData[currentMonthKey]?.rol || 0) - finalRes.rol) < 0.1 ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-300'}`}><CheckCircle2 size={24}/></div>
                   </div>
                 </div>
             </div>
           </div>
 
+          {/* RIEPILOGO MESE INGRANDITO */}
           <div className="bg-slate-900 text-white p-8 rounded-[3rem] shadow-xl">
-            <h3 className="text-[10px] font-black uppercase opacity-40 mb-8 tracking-widest text-center">Riepilogo Mese</h3>
-            <div className="space-y-5 font-bold text-sm">
-              <div className="flex justify-between border-b border-white/10 pb-2"><span>Ore Lavoro</span><span>{monthStats.lavorate}h</span></div>
-              <div className="flex justify-between border-b border-white/10 pb-2 text-red-300"><span>Ferie (GG)</span><span>{monthStats.ferie}</span></div>
-              <div className="flex justify-between border-b border-white/10 pb-2 text-blue-300"><span>ROL</span><span>{monthStats.rol}h</span></div>
-              <div className="flex justify-between border-b border-white/10 pb-2 text-purple-300"><span>104</span><span>{monthStats.p104}h</span></div>
-              <div className="flex justify-between text-yellow-300"><span>Malattia</span><span>{monthStats.malattia}</span></div>
+            <h3 className="text-xs font-black uppercase opacity-40 mb-8 tracking-widest text-center">Riepilogo Mensile</h3>
+            <div className="space-y-6 font-black text-base">
+              <div className="flex justify-between border-b border-white/10 pb-3"><span>ORE LAVORO</span><span className="text-2xl text-green-400">{monthStats.lavorate}h</span></div>
+              <div className="flex justify-between border-b border-white/10 pb-3"><span>FERIE (GG)</span><span className="text-2xl text-red-400">{monthStats.ferie}</span></div>
+              <div className="flex justify-between border-b border-white/10 pb-3"><span>ROL</span><span className="text-2xl text-blue-400">{monthStats.rol}h</span></div>
+              <div className="flex justify-between border-b border-white/10 pb-3"><span>LEGGE 104</span><span className="text-2xl text-purple-400">{monthStats.p104}h</span></div>
+              <div className="flex justify-between pb-3"><span>MALATTIA</span><span className="text-2xl text-yellow-400">{monthStats.malattia}</span></div>
             </div>
           </div>
         </div>
       </div>
 
+      {/* MODALI RIMASTI INVARIATI */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-[100]">
           <div className="bg-white rounded-[3.5rem] p-12 w-full max-w-md shadow-2xl relative">
@@ -214,7 +207,7 @@ const WorkCalendar = () => {
                 <div><label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Matura Ferie</label><input type="text" className="w-full bg-indigo-50 p-5 rounded-2xl font-bold border-2 border-indigo-100 mt-2" value={balances.maturazioneFerie} onChange={(e) => setBalances({...balances, maturazioneFerie: e.target.value})}/></div>
                 <div><label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Matura ROL</label><input type="text" className="w-full bg-indigo-50 p-5 rounded-2xl font-bold border-2 border-indigo-100 mt-2" value={balances.maturazioneRol} onChange={(e) => setBalances({...balances, maturazioneRol: e.target.value})}/></div>
               </div>
-              <button onClick={() => { saveToCloud(balances, "saldi_v4"); setShowSettings(false); }} className="w-full bg-indigo-600 text-white py-6 rounded-[2rem] font-black uppercase shadow-xl hover:bg-indigo-700">Salva Parametri</button>
+              <button onClick={() => { saveToCloud(balances, "saldi_v4"); setShowSettings(false); }} className="w-full bg-indigo-600 text-white py-6 rounded-[2rem] font-black uppercase shadow-xl">Salva Parametri</button>
             </div>
             <button onClick={() => setShowSettings(false)} className="absolute top-8 right-8 p-2 bg-slate-100 rounded-full text-slate-400"><X/></button>
           </div>
@@ -240,7 +233,7 @@ const WorkCalendar = () => {
                 <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-widest">Nota</label>
                 <textarea className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-[1.5rem] h-24 text-sm outline-none focus:border-blue-400 font-medium" value={selectedDay.notes || ""} onChange={(e) => setSelectedDay({...selectedDay, notes: e.target.value})}/>
             </div>
-            <button onClick={() => { const nd = {...workData, [selectedDay.date]: selectedDay}; setWorkData(nd); saveToCloud(nd, "calendario"); setSelectedDay(null); }} className="w-full bg-blue-600 text-white py-6 rounded-[2.2rem] font-black text-xl uppercase shadow-xl transition-transform active:scale-95">Salva</button>
+            <button onClick={() => { const nd = {...workData, [selectedDay.date]: selectedDay}; setWorkData(nd); saveToCloud(nd, "calendario"); setSelectedDay(null); }} className="w-full bg-blue-600 text-white py-6 rounded-[2.2rem] font-black text-xl uppercase shadow-xl">Salva</button>
             <button onClick={() => setSelectedDay(null)} className="absolute top-8 right-8 p-2 bg-slate-100 rounded-full text-slate-400"><X/></button>
           </div>
         </div>
